@@ -74,23 +74,155 @@
     </script>
     <script defer src="./main.js"></script>
   </head>
+  <script>
+    /*
+      The Power List is a Progressive Web App (PWA) designed to help users manage their daily tasks, track habits, and reflect on their progress. The app has seven core features:
 
-  <body x-data="{ darkMode: false }" x-bind:class="{ 'dark': darkMode }">
+      Task Management: Users can enter up to 5 daily tasks and mark them as completed or not completed.
+
+      Day Status: At the end of the day, users can mark the day as a 'Win' if all tasks were completed, or a 'Loss' if any tasks were incomplete.
+
+      Habit Tracker: When a task is completed for 21 consecutive days, it becomes a habit and is removed from the daily tasks list.
+
+      Task Streak Display: The app tracks and displays the duration of each task's completion streak over the past 21 days.
+
+      Reading List: Users can enter the books they are currently reading.
+
+      Daily Diary: Users can record personal reflections about their day.
+
+      Performance Summary: The app summarizes daily, weekly, monthly, and annual win/loss statistics.
+
+      The app is designed with a minimalist aesthetic, featuring a dark mode toggle option. Users do not need to register, and their data is stored locally on the device with the capability for cloud backup. The app also supports platforms like Nextcloud for automatic syncing. The primary user interface components include task input fields, status checkboxes, task streak counters, a day status selector, and screens for habits, summary, and diary.
+
+      The Power List app is built with the lightweight Skeleton CSS framework, ensuring a responsive and mobile-first design. The app also uses Alpine.js for interactivity, allowing for a smooth and engaging user experience.
+      */
+
+    //The data object using alpine.js
+
+    class task {
+      constructor() {
+        this.name = "";
+        this.completed = false;
+      }
+    }
+    class dayData {
+      constructor() {
+        this.tasks = [
+          new task(),
+          new task(),
+          new task(),
+          new task(),
+          new task(),
+        ];
+        this.dayStatus = "";
+        this.readingList = "";
+        this.dailyDiary = "";
+      }
+    }
+    class historyEntry {
+      constructor() {
+        this.date = "";
+        this.data = new dayData();
+      }
+    }
+    document.addEventListener("alpine:init", () => {
+      Alpine.store("darkMode", {
+        on: false,
+        toggle() {
+          console.log("toggle");
+          this.on = !this.on;
+        },
+      });
+      Alpine.store("powerList", {
+        selectedDate: new Date().toISOString().split("T")[0], // Selected date in "YYYY-MM-DD" format
+        data: new dayData(), // Data for the selected date
+        history: {}, // History of data for past dates
+        saveData() {
+          this.history[this.selectedDate] = this.data;
+          localStorage.setItem("powerList", JSON.stringify(this.history));
+        },
+        loadData() {
+          this.history = JSON.parse(localStorage.getItem("powerList")) || {};
+          this.data = this.history[this.selectedDate] || {
+            tasks: [],
+            dayStatus: "",
+            readingList: "",
+            dailyDiary: "",
+          };
+          //if the data is empty, set the data to the default
+          if (this.data.tasks.length == 0) {
+            //set current date
+            var date = new Date();
+            selectedDate = date.toISOString().split("T")[0];
+            //set the data to the default
+            this.data.tasks = [
+              {
+                order: 1,
+                description: "Task 1",
+                streak: 0,
+                completed: false,
+              },
+              {
+                order: 2,
+                description: "Task 2",
+                streak: 0,
+                completed: false,
+              },
+              {
+                order: 3,
+                description: "Task 3",
+                streak: 0,
+                completed: false,
+              },
+              {
+                order: 4,
+                description: "Task 4",
+                streak: 0,
+                completed: false,
+              },
+              {
+                order: 5,
+                description: "Task 5",
+                streak: 0,
+                completed: false,
+              },
+            ];
+          }
+        },
+        selectDate(date) {
+          this.saveData(); // Save the current data
+          this.selectedDate = date;
+          this.loadData(); // Load the data for the selected date
+        },
+        init() {
+          this.loadData();
+          console.log(this.data.tasks);
+        },
+      });
+    });
+  </script>
+
+  <body x-data :class="$store.darkMode.on && 'dark'">
     <div class="container">
       <header>
         <div class="row">
-          <div class="one-half column">
-            <h1>Power List Application</h1>
+          <div class="columns ten">
+            <h1>Power List</h1>
           </div>
-          <div class="one-half column u-pull-right">
-            <button
-              @click="darkMode = !darkMode"
-              x-text="darkMode ? 'Light Mode' : 'Dark Mode'"
-              class="button-primary"
-            ></button>
+          <div class="columns two">
+            <button x-data @click="$store.darkMode.toggle()">
+              <span x-show="$store.darkMode.on" class="icon">🌖</span>
+              <span x-show="!$store.darkMode.on">🌘</span>
+            </button>
           </div>
         </div>
         <div class="row">
+          <div class="one-half column">
+            <h1 x-text="$store.powerList.selectedDate"></h1>
+          </div>
+        </div>
+        <div class="row">
+          <div><button></button></div>
           <div class="twelve columns">
             <h5>Today's Date: [Insert date here]</h5>
           </div>
@@ -100,17 +232,21 @@
       <section class="tasks">
         <h4>Today's Tasks</h4>
         <!-- Repeat the following div for each task -->
-        <div class="row">
-          <div class="eight columns">
-            <input
-              class="u-full-width"
-              type="text"
-              placeholder="Task description here"
-            />
+        <template x-for="(task, index) in $store.powerList.data.tasks">
+          <div class="row">
+            <div class="one column" x-text="(index+1) +'.'"></div>
+            <div class="seven columns">
+              <input
+                class="u-full-width"
+                type="text"
+                placeholder="Task description here"
+              />
+            </div>
+            <div class="two columns"><input type="checkbox" x /> Done</div>
+            <div class="two columns">Streak: [Insert streak count here]</div>
           </div>
-          <div class="two columns"><input type="checkbox" x /> Done</div>
-          <div class="two columns">Streak: [Insert streak count here]</div>
-        </div>
+        </template>
+
         <!-- End of task div -->
         <div class="row">
           <div class="six columns">
@@ -149,69 +285,4 @@
       </section>
     </div>
   </body>
-  <script>
-    /*
-    The Power List is a Progressive Web App (PWA) designed to help users manage their daily tasks, track habits, and reflect on their progress. The app has seven core features:
-
-    Task Management: Users can enter up to 5 daily tasks and mark them as completed or not completed.
-
-    Day Status: At the end of the day, users can mark the day as a 'Win' if all tasks were completed, or a 'Loss' if any tasks were incomplete.
-
-    Habit Tracker: When a task is completed for 21 consecutive days, it becomes a habit and is removed from the daily tasks list.
-
-    Task Streak Display: The app tracks and displays the duration of each task's completion streak over the past 21 days.
-
-    Reading List: Users can enter the books they are currently reading.
-
-    Daily Diary: Users can record personal reflections about their day.
-
-    Performance Summary: The app summarizes daily, weekly, monthly, and annual win/loss statistics.
-
-    The app is designed with a minimalist aesthetic, featuring a dark mode toggle option. Users do not need to register, and their data is stored locally on the device with the capability for cloud backup. The app also supports platforms like Nextcloud for automatic syncing. The primary user interface components include task input fields, status checkboxes, task streak counters, a day status selector, and screens for habits, summary, and diary.
-
-    The Power List app is built with the lightweight Skeleton CSS framework, ensuring a responsive and mobile-first design. The app also uses Alpine.js for interactivity, allowing for a smooth and engaging user experience.
-    */
-    //The data object using alpine.js
-    document.addEventListener("alpine:init", () => {
-      Alpine.store("darkMode", {
-        on: false,
-
-        toggle() {
-          this.on = !this.on;
-        },
-      });
-
-      Alpine.store("powerList", {
-        selectedDate: new Date().toISOString().split("T")[0], // Selected date in "YYYY-MM-DD" format
-        data: {
-          tasks: [],
-          dayStatus: "",
-          readingList: [],
-          dailyDiary: "",
-        },
-        history: {}, // History of data for past dates
-        saveData() {
-          this.history[this.selectedDate] = this.data;
-          localStorage.setItem("powerList", JSON.stringify(this.history));
-        },
-        loadData() {
-          this.history = JSON.parse(localStorage.getItem("powerList")) || {};
-          this.data = this.history[this.selectedDate] || {
-            tasks: [],
-            dayStatus: "",
-            readingList: [],
-            dailyDiary: "",
-          };
-        },
-        selectDate(date) {
-          this.saveData(); // Save the current data
-          this.selectedDate = date;
-          this.loadData(); // Load the data for the selected date
-        },
-        init() {
-          this.loadData();
-        },
-      });
-    });
-  </script>
 </html>
