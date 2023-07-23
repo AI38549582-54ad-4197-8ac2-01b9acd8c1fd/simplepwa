@@ -6,7 +6,6 @@
     <title>The Power Shedule</title>
     <link rel="canonical" href="https://simplepwa.com" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-
     <!-- Icons and Colors -->
     <link
       rel="apple-touch-icon"
@@ -59,10 +58,16 @@
     <link rel="stylesheet" href="css/normalize.css" />
     <link rel="stylesheet" href="css/skeleton.css" />
     <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="deps/Fork-Awesome/css/fork-awesome.css" />
+    <link
+      rel="stylesheet"
+      href="deps/skeleton-fontawesome-buttons-1.0.1/skeleton-fontawesome-buttons.css"
+    />
     <script
       defer
       src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
     ></script>
+    <script src="deps/dayjs-1.11/package/dayjs.min.js"></script>
     <!-- Javscript -->
     <script>
       if ("serviceWorker" in navigator) {
@@ -72,6 +77,10 @@
         });
       }
     </script>
+    <script
+      charset="UTF-8"
+      src="deps/fuzzball.js-2.1.2/dist/fuzzball.umd.min.js"
+    ></script>
     <script defer src="./main.js"></script>
   </head>
   <script>
@@ -99,6 +108,7 @@
 
     //The data object using alpine.js
 
+    var localStorageDayPrefix = "powerListDayData-";
     class task {
       constructor() {
         this.name = "";
@@ -119,170 +129,244 @@
         this.dailyDiary = "";
       }
     }
-    class historyEntry {
-      constructor() {
-        this.date = "";
-        this.data = new dayData();
-      }
-    }
     document.addEventListener("alpine:init", () => {
       Alpine.store("darkMode", {
         on: false,
         toggle() {
-          console.log("toggle");
           this.on = !this.on;
         },
       });
+
       Alpine.store("powerList", {
-        selectedDate: new Date().toISOString().split("T")[0], // Selected date in "YYYY-MM-DD" format
+        selectedDate: dayjs(), // Selected date in "YYYY-MM-DD" format
         data: new dayData(), // Data for the selected date
-        history: {}, // History of data for past dates
+        last21Days: [], // Data for the last 21 days
+        autoCompleteOptions: [], // Autocomplete options for the task input fields
         saveData() {
-          this.history[this.selectedDate] = this.data;
-          localStorage.setItem("powerList", JSON.stringify(this.history));
+          //Save the data to local storage
+          // localStorageDayPrefix + this.selectedDate
+          localStorage.setItem(
+            localStorageDayPrefix + this.selectedDate.startOf("day"),
+            JSON.stringify(this.last21Days[0])
+          );
         },
         loadData() {
-          this.history = JSON.parse(localStorage.getItem("powerList")) || {};
-          this.data = this.history[this.selectedDate] || {
-            tasks: [],
-            dayStatus: "",
-            readingList: "",
-            dailyDiary: "",
-          };
-          //if the data is empty, set the data to the default
-          if (this.data.tasks.length == 0) {
-            //set current date
-            var date = new Date();
-            selectedDate = date.toISOString().split("T")[0];
-            //set the data to the default
-            this.data.tasks = [
-              {
-                order: 1,
-                description: "Task 1",
-                streak: 0,
-                completed: false,
-              },
-              {
-                order: 2,
-                description: "Task 2",
-                streak: 0,
-                completed: false,
-              },
-              {
-                order: 3,
-                description: "Task 3",
-                streak: 0,
-                completed: false,
-              },
-              {
-                order: 4,
-                description: "Task 4",
-                streak: 0,
-                completed: false,
-              },
-              {
-                order: 5,
-                description: "Task 5",
-                streak: 0,
-                completed: false,
-              },
-            ];
+          //select the current date from the last 21 days
+          this.loadLast21Days(this.selectedDate);
+          this.setAutoCompleteData();
+        },
+        setAutoCompleteData() {
+          this.autoCompleteOptions = [];
+          for (var i = 0; i < this.last21Days[0].tasks.length; i++) {
+            for (var j = 0; j < this.last21Days.length; j++) {
+              //if the taskname is not already in the autocomplete options
+              if (
+                !this.autoCompleteOptions.includes(
+                  this.last21Days[j].tasks[i].name
+                )
+              ) {
+                this.autoCompleteOptions.push(
+                  this.last21Days[j].tasks[i].name
+                );
+              }
+            }
           }
+          console.log(this.autoCompleteOptions);
+        },
+        calculateTaskStreaks() {
+          //Calculate the task streaks for the current day
+          for (var i = 0; i < this.last21Days[0].tasks.length; i++) {
+            this.last21Days[0].tasks[i].streak = this.getLast21DayStreak(
+              this.last21Days[0].tasks[i].name
+            );
+          }
+        },
+        loadLast21Days(targetDate) {
+          var date = new dayjs(targetDate);
+          this.last21Days = [];
+          for (var i = 0; i < 21; i++) {
+            var data = this.loadDataForDate(date.subtract(i, "day"));
+            if (data == undefined) {
+              data = new dayData();
+            }
+            this.last21Days.push(data);
+          }
+        },
+        loadDataForDate(dayJsDate) {
+          //Load the data for the selected date from local storage
+          let key = localStorageDayPrefix + dayJsDate.startOf("day");
+          var data = localStorage.getItem(key);
+          if (data != undefined) {
+            return JSON.parse(data);
+          } else {
+            return new dayData();
+          }
+        },
+        getLast21DayStreak(taskName) {
+          let count = 0;
+          for (var i = 0; i < 21; i++) {
+            for (var j = 0; j < this.last21Days[i].tasks.length; j++) {
+              let ratio = fuzzball.ratio(
+                taskName,
+                this.last21Days[i].tasks[j].name
+              );
+              if (ratio > 80) {
+                if (this.last21Days[i].tasks[j].completed) {
+                  count++;
+                  break;
+                }
+              }              
+            }
+          }
+          return count;
         },
         selectDate(date) {
           this.saveData(); // Save the current data
-          this.selectedDate = date;
+          this.selectedDate = dayjs(date);
+          this.loadLast21Days(this.selectedDate);
           this.loadData(); // Load the data for the selected date
+        },
+        nextDay() {
+          date = this.selectedDate.add(1, "day");
+          this.selectDate(date);
+          console.log(this.displayDate);
+        },
+        previousDay() {
+          date = this.selectedDate.subtract(1, "day");
+          this.selectDate(date);
+          console.log(this.displayDate);
         },
         init() {
           this.loadData();
-          console.log(this.data.tasks);
         },
       });
     });
+    // when the window closes save the data
+    window.onbeforeunload = function () {
+      Alpine.store("powerList").saveData();
+    };
   </script>
-
   <body x-data :class="$store.darkMode.on && 'dark'">
-    <div class="container">
-      <header>
-        <div class="row">
-          <div class="columns ten">
-            <h1>Power List</h1>
-          </div>
-          <div class="columns two">
-            <button x-data @click="$store.darkMode.toggle()">
-              <span x-show="$store.darkMode.on" class="icon">🌖</span>
-              <span x-show="!$store.darkMode.on">🌘</span>
-            </button>
-          </div>
-        </div>
-        <div class="row">
-          <div class="one-half column">
-            <h1 x-text="$store.powerList.selectedDate"></h1>
-          </div>
-        </div>
-        <div class="row">
-          <div><button></button></div>
-          <div class="twelve columns">
-            <h5>Today's Date: [Insert date here]</h5>
-          </div>
-        </div>
-      </header>
-
-      <section class="tasks">
-        <h4>Today's Tasks</h4>
-        <!-- Repeat the following div for each task -->
-        <template x-for="(task, index) in $store.powerList.data.tasks">
+    <form>
+      <div class="container">
+        <header>
           <div class="row">
-            <div class="one column" x-text="(index+1) +'.'"></div>
-            <div class="seven columns">
+            <div class="columns ten">
+              <h1>Power List</h1>
+            </div>
+            <div class="columns two">
+              <button type="button" x-data @click="$store.darkMode.toggle()">
+                <span x-show="$store.darkMode.on" class="icon">🌖</span>
+                <span x-show="!$store.darkMode.on">🌘</span>
+              </button>
+            </div>
+          </div>
+          <div class="row">
+            <div class="one columns">
+              <button
+                class="button button-icon"
+                x-on:click="$store.powerList.previousDay()"
+                type="button" 
+              >
+                <i class="fa fa-angle-left" aria-hidden="true"></i>
+              </button>
+            </div>
+            <div class="ten columns">
+              <h3 style="text-align-last: center">
+                <span
+                  x-text="$store.powerList.selectedDate.format('DD.MM.YYYY')"
+                ></span>
+              </h3>
+            </div>
+            <div class="one columns">
+              <button
+                class="button button-icon"
+                x-on:click="$store.powerList.nextDay()"
+                type="button" 
+              >
+                <i class="fa fa-angle-right" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <section class="tasks">
+          <h4>Today's Tasks</h4>
+          <!-- Repeat the following div for each task -->
+          <template
+            x-for="(task, index) in $store.powerList.last21Days[0].tasks"
+          >
+            <div class="row">
+              <div class="one column" x-text="(index+1) +'.'"></div>
+              <div class="seven columns">
+                <input
+                  class="u-full-width"
+                  list="autocompleteOptions"
+                  type="text"
+                  placeholder="Task description here"
+                  x-model="task.name"
+                />
+                <datalist id="autocompleteOptions">
+                  <template x-for="option in $store.powerList.autoCompleteOptions">
+                    <option x-html="option"></option>
+                  </template>
+                </datalist>
+              </div>
+              <div class="two columns" x-id="['text-input']">
+                <label :for="$id('text-input')"></span>Done
+                <input
+                  type="checkbox"
+                  x-model="task.completed"
+                  :id="$id('text-input')"
+                />
+              </div>
+              <div class="two columns">
+                Streak:
+                <span
+                  x-html="$store.powerList.getLast21DayStreak(task.name)"
+                ></span>
+              </div>
+            </div>
+          </template>
+
+          <!-- End of task div -->
+          <div class="row">
+            <div class="six columns">
+              <button class="button-primary">Mark Day as Win</button>
+            </div>
+            <div class="six columns">
+              <button>Mark Day as Loss</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="navigation">
+          <div class="row">
+            <div class="four columns">
+              <button class="button-primary">Habit Screen</button>
+            </div>
+            <div class="four columns">
+              <button class="button-primary">Summary Screen</button>
+            </div>
+            <div class="four columns">
+              <button class="button-primary">Diary Screen</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="reading">
+          <div class="row">
+            <div class="twelve columns">
               <input
                 class="u-full-width"
                 type="text"
-                placeholder="Task description here"
+                placeholder="What are you reading?"
+                x-model="$store.powerList.last21Days[0].readingList"
               />
             </div>
-            <div class="two columns"><input type="checkbox" x /> Done</div>
-            <div class="two columns">Streak: [Insert streak count here]</div>
           </div>
-        </template>
-
-        <!-- End of task div -->
-        <div class="row">
-          <div class="six columns">
-            <button class="button-primary">Mark Day as Win</button>
-          </div>
-          <div class="six columns">
-            <button>Mark Day as Loss</button>
-          </div>
-        </div>
-      </section>
-
-      <section class="navigation">
-        <div class="row">
-          <div class="four columns">
-            <button class="button-primary">Habit Screen</button>
-          </div>
-          <div class="four columns">
-            <button class="button-primary">Summary Screen</button>
-          </div>
-          <div class="four columns">
-            <button class="button-primary">Diary Screen</button>
-          </div>
-        </div>
-      </section>
-
-      <section class="reading">
-        <div class="row">
-          <div class="twelve columns">
-            <input
-              class="u-full-width"
-              type="text"
-              placeholder="What are you reading?"
-            />
-          </div>
-        </div>
-      </section>
-    </div>
+        </section>
+      </div>
+    </form>
   </body>
 </html>

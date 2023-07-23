@@ -1,6 +1,7 @@
 const cacheName = "cache1"; // Change value to force update
 
 self.addEventListener("install", event => {
+	console.log("Service worker installing...");
 	// Kick out the old service worker
 	self.skipWaiting();
 
@@ -80,3 +81,5 @@ self.addEventListener("fetch", event => {
 		})
 	);
 });
+
+//Update on reload
